@@ -138,13 +138,7 @@ const EXAMPLE_LAST_ENTITY_VERSION: EntityVersion = {
   name: 'exampleEntity',
   displayName: 'example entity',
   pluralDisplayName: 'exampleEntities',
-  description: 'example entity',
-  fields: [
-    {
-      ...EXAMPLE_ENTITY_FIELD,
-      entityVersionId: EXAMPLE_LAST_ENTITY_VERSION_ID
-    }
-  ]
+  description: 'example entity'
 };
 
 const EXAMPLE_ENTITY_FIELD_DATA = {
@@ -549,6 +543,64 @@ describe('EntityService', () => {
             }
           }
         }
+      }
+    });
+  });
+
+  it('should get entities by versions', async () => {
+    prismaEntityVersionFindManyMock.mockImplementationOnce(() => [
+      {
+        ...EXAMPLE_LAST_ENTITY_VERSION,
+        entity: EXAMPLE_ENTITY,
+        permissions: [],
+        commit: EXAMPLE_COMMIT
+      },
+      {
+        ...EXAMPLE_LAST_ENTITY_VERSION,
+        entity: EXAMPLE_ENTITY,
+        permissions: [],
+        commit: EXAMPLE_COMMIT
+      }
+    ]);
+
+    const args = {
+      where: {
+        builds: {
+          some: {
+            id: 'buildId'
+          }
+        }
+      },
+      include: {
+        permissions: true,
+        commit: true
+      }
+    };
+
+    const expected = [
+      {
+        ...EXAMPLE_ENTITY,
+        fields: undefined,
+        permissions: []
+      },
+      {
+        ...EXAMPLE_ENTITY,
+        fields: undefined,
+        permissions: []
+      }
+    ];
+
+    expect(await service.getEntitiesByVersions(args)).toEqual(expected);
+    expect(prismaEntityVersionFindManyMock).toBeCalledTimes(1);
+    expect(prismaEntityVersionFindManyMock).toBeCalledWith({
+      where: {
+        ...args.where,
+        deleted: null
+      },
+      include: {
+        ...args.include,
+        entity: true,
+        fields: undefined
       }
     });
   });
