@@ -15,6 +15,7 @@ import { EnumDataType } from 'src/enums/EnumDataType';
 import { FindManyEntityArgs } from './dto';
 import {
   CURRENT_VERSION_NUMBER,
+  DEFAULT_ENTITIES,
   DEFAULT_PERMISSIONS,
   USER_ENTITY_NAME
 } from './constants';
@@ -27,6 +28,7 @@ import {
 } from '../app/dto';
 import { DiffService } from 'src/services/diff.service';
 
+const EXAMPLE_APP_ID = 'exampleAppId';
 const EXAMPLE_ENTITY_ID = 'exampleEntityId';
 const EXAMPLE_CURRENT_ENTITY_VERSION_ID = 'currentEntityVersionId';
 const EXAMPLE_LAST_ENTITY_VERSION_ID = 'lastEntityVersionId';
@@ -603,6 +605,21 @@ describe('EntityService', () => {
         fields: undefined
       }
     });
+  });
+
+  it('should create default entities', async () => {
+    jest
+      .spyOn(service, 'bulkCreateEntities')
+      .mockImplementationOnce(() => Promise.resolve());
+
+    await expect(service.createDefaultEntities(EXAMPLE_APP_ID, EXAMPLE_USER))
+      .resolves.toBeUndefined;
+    expect(service.bulkCreateEntities).toHaveBeenCalledTimes(1);
+    expect(service.bulkCreateEntities).toHaveBeenCalledWith(
+      EXAMPLE_APP_ID,
+      EXAMPLE_USER,
+      DEFAULT_ENTITIES
+    );
   });
 
   it('should get entity fields', async () => {
