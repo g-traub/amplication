@@ -153,7 +153,11 @@ const EXAMPLE_ENTITY_FIELD_DATA = {
   dataType: EnumDataType.SingleLineText,
   properties: {
     maxLength: 42
-  },
+  }
+};
+
+const EXAMPLE_ENTITY_FIELD_DATA_WITH_NESTED_QUERY = {
+  ...EXAMPLE_ENTITY_FIELD_DATA,
   entityVersion: {
     connect: {
       // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -622,6 +626,63 @@ describe('EntityService', () => {
     );
   });
 
+  it('should create entities in bulk', async () => {
+    jest.useFakeTimers();
+
+    const EXAMPLE_ENTITY_FIELDS_DATA = [
+      EXAMPLE_ENTITY_FIELD_DATA,
+      EXAMPLE_ENTITY_FIELD_DATA
+    ];
+    const ENTITY_NAMES = {
+      name: 'exemple',
+      displayName: 'Example',
+      pluralDisplayName: 'Examples',
+      description: 'example entity'
+    };
+    const EXAMPLE_BULK_ENTITY_DATA = {
+      id: EXAMPLE_ENTITY_ID,
+      ...ENTITY_NAMES,
+      fields: EXAMPLE_ENTITY_FIELDS_DATA
+    };
+
+    await expect(
+      service.bulkCreateEntities(EXAMPLE_APP_ID, EXAMPLE_USER, [
+        EXAMPLE_BULK_ENTITY_DATA,
+        EXAMPLE_BULK_ENTITY_DATA
+      ])
+    ).resolves.toBeUndefined;
+    expect(prismaEntityCreateMock).toHaveBeenCalledTimes(2);
+    expect(prismaEntityCreateMock).toHaveBeenCalledWith({
+      data: {
+        id: EXAMPLE_ENTITY_ID,
+        ...ENTITY_NAMES,
+        app: { connect: { id: EXAMPLE_APP_ID } },
+        lockedAt: new Date(),
+        lockedByUser: {
+          connect: {
+            id: EXAMPLE_USER.id
+          }
+        },
+        versions: {
+          create: {
+            ...ENTITY_NAMES,
+            commit: undefined,
+            versionNumber: CURRENT_VERSION_NUMBER,
+            permissions: {
+              create: DEFAULT_PERMISSIONS
+            },
+
+            fields: {
+              create: EXAMPLE_ENTITY_FIELDS_DATA
+            }
+          }
+        }
+      }
+    });
+
+    jest.useRealTimers();
+  });
+
   it('should get entity fields', async () => {
     const entity = {
       entityId: EXAMPLE_ENTITY_ID,
@@ -1003,7 +1064,7 @@ describe('EntityService', () => {
 
     const args = {
       where: { id: EXAMPLE_ENTITY_FIELD.id },
-      data: EXAMPLE_ENTITY_FIELD_DATA
+      data: EXAMPLE_ENTITY_FIELD_DATA_WITH_NESTED_QUERY
     };
     await expect(
       service.updateField(args, EXAMPLE_USER)
@@ -1016,7 +1077,7 @@ describe('EntityService', () => {
       await service.createField(
         {
           data: {
-            ...EXAMPLE_ENTITY_FIELD_DATA,
+            ...EXAMPLE_ENTITY_FIELD_DATA_WITH_NESTED_QUERY,
             entity: { connect: { id: EXAMPLE_ENTITY_ID } }
           }
         },
@@ -1026,7 +1087,7 @@ describe('EntityService', () => {
     expect(prismaEntityFieldCreateMock).toBeCalledTimes(1);
     expect(prismaEntityFieldCreateMock).toBeCalledWith({
       data: {
-        ...EXAMPLE_ENTITY_FIELD_DATA,
+        ...EXAMPLE_ENTITY_FIELD_DATA_WITH_NESTED_QUERY,
         permanentId: expect.any(String)
       }
     });
@@ -1036,7 +1097,7 @@ describe('EntityService', () => {
       service.createField(
         {
           data: {
-            ...EXAMPLE_ENTITY_FIELD_DATA,
+            ...EXAMPLE_ENTITY_FIELD_DATA_WITH_NESTED_QUERY,
             name: 'Foo Bar',
             entity: { connect: { id: EXAMPLE_ENTITY_ID } }
           }
@@ -1048,7 +1109,7 @@ describe('EntityService', () => {
   it('should update entity field', async () => {
     const args = {
       where: { id: EXAMPLE_ENTITY_FIELD.id },
-      data: EXAMPLE_ENTITY_FIELD_DATA
+      data: EXAMPLE_ENTITY_FIELD_DATA_WITH_NESTED_QUERY
     };
     expect(await service.updateField(args, EXAMPLE_USER)).toEqual(
       EXAMPLE_ENTITY_FIELD
