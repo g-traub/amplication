@@ -683,6 +683,29 @@ describe('EntityService', () => {
     jest.useRealTimers();
   });
 
+  it('should create fields in bulk', async () => {
+    const EXAMPLE_PERMANENT_ID = 'permanentId';
+    const EXAMPLE_ENTITY_FIELDS_DATA_WITH_PERMANENT_IDS = [
+      { ...EXAMPLE_ENTITY_FIELD_DATA, permanentId: EXAMPLE_PERMANENT_ID },
+      { ...EXAMPLE_ENTITY_FIELD_DATA, permanentId: EXAMPLE_PERMANENT_ID }
+    ];
+
+    await expect(
+      service.bulkCreateFields(
+        EXAMPLE_USER,
+        EXAMPLE_ENTITY_ID,
+        EXAMPLE_ENTITY_FIELDS_DATA_WITH_PERMANENT_IDS
+      )
+    ).resolves.toBe(undefined);
+    expect(prismaEntityFieldCreateMock).toHaveBeenCalledTimes(2);
+    expect(prismaEntityFieldCreateMock).toHaveBeenCalledWith({
+      data: {
+        ...EXAMPLE_ENTITY_FIELD_DATA_WITH_NESTED_QUERY,
+        permanentId: EXAMPLE_PERMANENT_ID
+      }
+    });
+  });
+
   it('should get entity fields', async () => {
     const entity = {
       entityId: EXAMPLE_ENTITY_ID,
