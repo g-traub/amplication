@@ -478,27 +478,30 @@ export class EntityService {
         ? EnumPendingChangeAction.Update
         : EnumPendingChangeAction.Create;
 
-      entity.versions = undefined; /**remove the versions data - it will only be returned if explicitly asked by gql */
+      const resource = {
+        ...entity,
+        versions: undefined /**remove the versions data - it will only be returned if explicitly asked by gql */
+      };
 
       //prepare name fields for display
       if (action === EnumPendingChangeAction.Delete) {
-        entity.name = revertDeletedItemName(entity.name, entity.id);
-        entity.displayName = revertDeletedItemName(
-          entity.displayName,
-          entity.id
+        resource.name = revertDeletedItemName(resource.name, resource.id);
+        resource.displayName = revertDeletedItemName(
+          resource.displayName,
+          resource.id
         );
-        entity.pluralDisplayName = revertDeletedItemName(
-          entity.pluralDisplayName,
-          entity.id
+        resource.pluralDisplayName = revertDeletedItemName(
+          resource.pluralDisplayName,
+          resource.id
         );
       }
 
       return {
-        resourceId: entity.id,
+        resourceId: resource.id,
         action: action,
         resourceType: EnumPendingChangeResourceType.Entity,
         versionNumber: lastVersion.versionNumber + 1,
-        resource: entity
+        resource
       };
     });
   }
@@ -530,19 +533,20 @@ export class EntityService {
         ? EnumPendingChangeAction.Update
         : EnumPendingChangeAction.Create;
 
+      const resource = { ...entity };
       //prepare name fields for display
       if (action === EnumPendingChangeAction.Delete) {
-        entity.name = changedVersion.name;
-        entity.displayName = changedVersion.displayName;
-        entity.pluralDisplayName = changedVersion.pluralDisplayName;
+        resource.name = changedVersion.name;
+        resource.displayName = changedVersion.displayName;
+        resource.pluralDisplayName = changedVersion.pluralDisplayName;
       }
 
       return {
-        resourceId: entity.id,
+        resourceId: resource.id,
         action: action,
         resourceType: EnumPendingChangeResourceType.Entity,
         versionNumber: changedVersion.versionNumber,
-        resource: entity
+        resource
       };
     });
   }
