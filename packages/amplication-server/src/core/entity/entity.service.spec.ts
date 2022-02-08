@@ -112,7 +112,7 @@ const EXAMPLE_ENTITY_PENDING_CHANGE_CREATE: EntityPendingChange = {
 };
 const EXAMPLE_DELETED_ENTITY = {
   ...EXAMPLE_ENTITY,
-  versions: [EXAMPLE_CURRENT_ENTITY_VERSION],
+  versions: [{ ...EXAMPLE_CURRENT_ENTITY_VERSION, deleted: true }],
   deletedAt: new Date()
 };
 const EXAMPLE_ENTITY_PENDING_CHANGE_DELETE: EntityPendingChange = {
@@ -120,7 +120,7 @@ const EXAMPLE_ENTITY_PENDING_CHANGE_DELETE: EntityPendingChange = {
   action: EnumPendingChangeAction.Delete,
   resourceType: EnumPendingChangeResourceType.Entity,
   versionNumber: 1,
-  resource: EXAMPLE_DELETED_ENTITY
+  resource: { ...EXAMPLE_DELETED_ENTITY, versions: undefined }
 };
 const EXAMPLE_ENTITY_PENDING_CHANGE_UPDATE: EntityPendingChange = {
   resourceId: EXAMPLE_ENTITY.id,
@@ -1452,4 +1452,67 @@ describe('EntityService', () => {
     expect(await service.hasPendingChanges(EXAMPLE_ENTITY.id)).toBe(false);
     expect(areDifferentMock).not.toBeCalled();
   });
+  it.each([
+    [
+      'updated',
+      {
+        ...EXAMPLE_LOCKED_ENTITY,
+        lockedByUser: EXAMPLE_USER,
+        versions: [EXAMPLE_LAST_ENTITY_VERSION]
+      },
+      {
+        resourceId: EXAMPLE_LOCKED_ENTITY.id,
+        action: EnumPendingChangeAction.Update,
+        resourceType: EnumPendingChangeResourceType.Entity,
+        versionNumber: EXAMPLE_LAST_ENTITY_VERSION.versionNumber
+      }
+    ],
+    [
+      'deleted',
+      {
+        ...EXAMPLE_DELETED_ENTITY,
+        lockedByUserId: EXAMPLE_USER_ID,
+        lockedAt: new Date(),
+        lockedByUser: EXAMPLE_USER
+      },
+      {
+        resourceId: EXAMPLE_DELETED_ENTITY.id,
+        action: EnumPendingChangeAction.Delete,
+        resourceType: EnumPendingChangeResourceType.Entity,
+        versionNumber: CURRENT_VERSION_NUMBER
+      }
+    ]
+  ])(
+    'should get changed (%s) entities by commit',
+    async (_action, entity, partialPendingChange) => {
+      const RESULTING_PENDING_CHANGE = {
+        ...partialPendingChange,
+        resource: entity
+      };
+
+      prismaEntityFindManyMock.mockImplementationOnce(() => [entity, entity]);
+
+      expect(
+        await service.getChangedEntitiesByCommit(EXAMPLE_COMMIT_ID)
+      ).toEqual([RESULTING_PENDING_CHANGE, RESULTING_PENDING_CHANGE]);
+      expect(prismaEntityFindManyMock).toBeCalledTimes(1);
+      expect(prismaEntityFindManyMock).toBeCalledWith({
+        where: {
+          versions: {
+            some: {
+              commitId: EXAMPLE_COMMIT_ID
+            }
+          }
+        },
+        include: {
+          lockedByUser: true,
+          versions: {
+            where: {
+              commitId: EXAMPLE_COMMIT_ID
+            }
+          }
+        }
+      });
+    }
+  );
 });
