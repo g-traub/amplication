@@ -975,6 +975,48 @@ describe('EntityService', () => {
     expect(prismaEntityVersionFindManyMock).toBeCalledWith(args);
   });
 
+  it('should get the latest versions', async () => {
+    const args = {
+      where: { app: { id: EXAMPLE_APP_ID } }
+    };
+    const findManyArgs = {
+      where: {
+        ...args.where,
+        appId: args.where.app.id,
+        deletedAt: null
+      },
+      select: {
+        versions: {
+          where: {
+            versionNumber: {
+              not: CURRENT_VERSION_NUMBER
+            }
+          },
+          take: 1,
+          orderBy: {
+            versionNumber: Prisma.SortOrder.desc
+          }
+        }
+      }
+    };
+    const findManyResult = [
+      {
+        ...EXAMPLE_ENTITY,
+        versions: [EXAMPLE_LAST_ENTITY_VERSION]
+      },
+      {
+        ...EXAMPLE_ENTITY,
+        versions: []
+      }
+    ];
+    prismaEntityFindManyMock.mockImplementationOnce(() => findManyResult);
+    expect(await service.getLatestVersions(args)).toEqual([
+      EXAMPLE_LAST_ENTITY_VERSION
+    ]);
+    expect(prismaEntityFindManyMock).toBeCalledTimes(1);
+    expect(prismaEntityFindManyMock).toBeCalledWith(findManyArgs);
+  });
+
   it('should validate that entity ID exists in the current app and is persistent', async () => {
     const args = {
       entityId: EXAMPLE_ENTITY_ID,
