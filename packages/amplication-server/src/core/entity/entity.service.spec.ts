@@ -340,6 +340,9 @@ const prismaEntityPermissionFindManyMock = jest.fn(() => [
 ]);
 const prismaEntityPermissionFieldDeleteManyMock = jest.fn(() => null);
 const prismaEntityPermissionFieldFindManyMock = jest.fn(() => null);
+const prismaEntityPermissionFieldCreateMock = jest.fn(
+  () => EXAMPLE_ENTITY_PERMISSION_FIELD
+);
 const prismaEntityPermissionRoleDeleteManyMock = jest.fn(() => null);
 
 const areDifferentMock = jest.fn(() => true);
@@ -382,7 +385,8 @@ describe('EntityService', () => {
             },
             entityPermissionField: {
               deleteMany: prismaEntityPermissionFieldDeleteManyMock,
-              findMany: prismaEntityPermissionFieldFindManyMock
+              findMany: prismaEntityPermissionFieldFindManyMock,
+              create: prismaEntityPermissionFieldCreateMock
             },
             entityPermissionRole: {
               deleteMany: prismaEntityPermissionRoleDeleteManyMock
@@ -1698,5 +1702,76 @@ describe('EntityService', () => {
         }
       }
     });
+  });
+  it('should add an entity permission field', async () => {
+    const args = {
+      data: {
+        entity: EXAMPLE_ENTITY_WHERE_PARENT_ID,
+        fieldName: EXAMPLE_ENTITY_FIELD_NAME,
+        action: EXAMPLE_ACTION
+      }
+    };
+    jest
+      .spyOn(service, 'validateAllFieldsExist')
+      .mockResolvedValueOnce(new Set());
+    prismaEntityVersionFindOneMock.mockResolvedValueOnce(
+      EXAMPLE_CURRENT_ENTITY_VERSION
+    );
+
+    expect(await service.addEntityPermissionField(args, EXAMPLE_USER)).toEqual(
+      EXAMPLE_ENTITY_PERMISSION_FIELD
+    );
+    expect(prismaEntityVersionFindOneMock).toBeCalledTimes(1);
+    expect(prismaEntityVersionFindOneMock).toBeCalledWith({
+      where: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        entityId_versionNumber: {
+          entityId: args.data.entity.connect.id,
+          versionNumber: CURRENT_VERSION_NUMBER
+        }
+      }
+    });
+    expect(prismaEntityPermissionFieldCreateMock).toBeCalledTimes(1);
+    expect(prismaEntityPermissionFieldCreateMock).toBeCalledWith({
+      data: {
+        field: {
+          connect: {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            entityVersionId_name: {
+              entityVersionId: EXAMPLE_CURRENT_ENTITY_VERSION_ID,
+              name: args.data.fieldName
+            }
+          }
+        },
+        permission: {
+          connect: {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            entityVersionId_action: {
+              entityVersionId: EXAMPLE_CURRENT_ENTITY_VERSION_ID,
+              action: args.data.action
+            }
+          }
+        }
+      },
+      include: {
+        field: true
+      }
+    });
+  });
+  it("should throw an error when the field that we are adding to the permission doesn't exist", async () => {
+    const args = {
+      data: {
+        entity: EXAMPLE_ENTITY_WHERE_PARENT_ID,
+        fieldName: EXAMPLE_NON_EXISTING_ENTITY_FIELD_NAME,
+        action: EXAMPLE_ACTION
+      }
+    };
+    jest
+      .spyOn(service, 'validateAllFieldsExist')
+      .mockResolvedValueOnce(new Set([EXAMPLE_NON_EXISTING_ENTITY_FIELD_NAME]));
+
+    await expect(
+      service.addEntityPermissionField(args, EXAMPLE_USER)
+    ).rejects.toThrow(/invalid field selected/i);
   });
 });
