@@ -16,7 +16,10 @@ import {
   EntityField,
   User,
   Commit,
-  EntityPermission
+  EntityPermission,
+  EntityPermissionField,
+  EntityPermissionRole,
+  AppRole
 } from 'src/models';
 import { EnumDataType } from 'src/enums/EnumDataType';
 import { EnumEntityAction } from 'src/enums/EnumEntityAction';
@@ -153,12 +156,37 @@ const EXAMPLE_LAST_ENTITY_VERSION: EntityVersion = {
   description: 'example entity'
 };
 
+const EXAMPLE_APP_ROLE: AppRole = {
+  id: 'exampleAppRoleId',
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  name: 'exampleAppRole',
+  displayName: 'example app role'
+};
+
 const EXAMPLE_ENTITY_PERMISSION: EntityPermission = {
   id: 'examplePermissionId',
   entityVersionId: EXAMPLE_CURRENT_ENTITY_VERSION_ID,
   action: EXAMPLE_ACTION,
   type: EXAMPLE_ROLE
 };
+
+const EXAMPLE_ENTITY_PERMISSION_FIELD: EntityPermissionField = {
+  id: 'examplePermissionFieldId',
+  permissionId: EXAMPLE_ENTITY_PERMISSION.id,
+  fieldPermanentId: EXAMPLE_ENTITY_FIELD.permanentId,
+  entityVersionId: EXAMPLE_LAST_ENTITY_VERSION_ID,
+  field: EXAMPLE_ENTITY_FIELD
+};
+
+const EXAMPLE_ENTITY_PERMISSION_ROLE: EntityPermissionRole = {
+  id: 'exampleEntityPermissionRoleId',
+  entityVersionId: EXAMPLE_CURRENT_ENTITY_VERSION_ID,
+  action: EXAMPLE_ACTION,
+  appRoleId: 'exampleAppRoleId',
+  appRole: EXAMPLE_APP_ROLE
+};
+
 const EXAMPLE_ENTITY_FIELD_DATA = {
   name: 'exampleEntityFieldName',
   displayName: 'Example Entity Field Display Name',
@@ -192,6 +220,27 @@ const EXAMPLE_USER: User = {
 };
 
 const EXAMPLE_ENTITY_WHERE_PARENT_ID = { connect: { id: 'EXAMPLE_ID' } };
+
+const EXAMPLE_ENTITY_PERMISSION_WITH_ROLES_AND_FIELDS: EntityPermission = {
+  ...EXAMPLE_ENTITY_PERMISSION,
+  permissionRoles: [
+    {
+      ...EXAMPLE_ENTITY_PERMISSION_ROLE,
+      appRole: EXAMPLE_APP_ROLE
+    }
+  ],
+  permissionFields: [
+    {
+      ...EXAMPLE_ENTITY_PERMISSION_FIELD,
+      permissionRoles: [
+        {
+          ...EXAMPLE_ENTITY_PERMISSION_ROLE,
+          appRole: EXAMPLE_APP_ROLE
+        }
+      ]
+    }
+  ]
+};
 
 const prismaEntityFindFirstMock = jest.fn(() => {
   return EXAMPLE_ENTITY;
@@ -285,7 +334,10 @@ const prismaEntityFieldFindFirstMock = jest.fn(
 const prismaEntityFieldCreateMock = jest.fn(() => EXAMPLE_ENTITY_FIELD);
 const prismaEntityFieldUpdateMock = jest.fn(() => EXAMPLE_ENTITY_FIELD);
 
-const prismaEntityPermissionFindManyMock = jest.fn(() => []);
+const prismaEntityPermissionFindManyMock = jest.fn(() => [
+  EXAMPLE_ENTITY_PERMISSION,
+  EXAMPLE_ENTITY_PERMISSION
+]);
 const prismaEntityPermissionFieldDeleteManyMock = jest.fn(() => null);
 const prismaEntityPermissionFieldFindManyMock = jest.fn(() => null);
 const prismaEntityPermissionRoleDeleteManyMock = jest.fn(() => null);
@@ -1588,5 +1640,63 @@ describe('EntityService', () => {
       CURRENT_VERSION_NUMBER,
       EXAMPLE_ACTION
     );
+  });
+  it('should get version permissions', async () => {
+    prismaEntityPermissionFindManyMock.mockReturnValueOnce([
+      EXAMPLE_ENTITY_PERMISSION_WITH_ROLES_AND_FIELDS,
+      EXAMPLE_ENTITY_PERMISSION_WITH_ROLES_AND_FIELDS
+    ]);
+    expect(
+      await service.getVersionPermissions(
+        EXAMPLE_ENTITY_ID,
+        CURRENT_VERSION_NUMBER,
+        EXAMPLE_ACTION
+      )
+    ).toEqual([
+      EXAMPLE_ENTITY_PERMISSION_WITH_ROLES_AND_FIELDS,
+      EXAMPLE_ENTITY_PERMISSION_WITH_ROLES_AND_FIELDS
+    ]);
+    expect(prismaEntityPermissionFindManyMock).toBeCalledTimes(1);
+    expect(prismaEntityPermissionFindManyMock).toBeCalledWith({
+      where: {
+        entityVersion: {
+          entityId: EXAMPLE_ENTITY_ID,
+          versionNumber: CURRENT_VERSION_NUMBER,
+          entity: {
+            deletedAt: null
+          }
+        },
+        action: EXAMPLE_ACTION
+      },
+      orderBy: {
+        action: Prisma.SortOrder.asc
+      },
+      include: {
+        permissionRoles: {
+          orderBy: {
+            appRoleId: Prisma.SortOrder.asc
+          },
+          include: {
+            appRole: true
+          }
+        },
+        permissionFields: {
+          orderBy: {
+            fieldPermanentId: Prisma.SortOrder.asc
+          },
+          include: {
+            field: true,
+            permissionRoles: {
+              orderBy: {
+                appRoleId: Prisma.SortOrder.asc
+              },
+              include: {
+                appRole: true
+              }
+            }
+          }
+        }
+      }
+    });
   });
 });
