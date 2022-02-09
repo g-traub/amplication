@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Prisma, EnumEntityAction } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { camelCase } from 'camel-case';
 import { pick, omit } from 'lodash';
 import {
@@ -10,8 +10,17 @@ import {
   NAME_VALIDATION_ERROR_MESSAGE
 } from './entity.service';
 import { PrismaService } from 'nestjs-prisma';
-import { Entity, EntityVersion, EntityField, User, Commit } from 'src/models';
+import {
+  Entity,
+  EntityVersion,
+  EntityField,
+  User,
+  Commit,
+  EntityPermission
+} from 'src/models';
 import { EnumDataType } from 'src/enums/EnumDataType';
+import { EnumEntityAction } from 'src/enums/EnumEntityAction';
+import { EnumEntityPermissionType } from 'src/enums/EnumEntityPermissionType';
 import { FindManyEntityArgs } from './dto';
 import {
   CURRENT_VERSION_NUMBER,
@@ -35,6 +44,7 @@ const EXAMPLE_LAST_ENTITY_VERSION_ID = 'lastEntityVersionId';
 const EXAMPLE_LAST_ENTITY_VERSION_NUMBER = 4;
 
 const EXAMPLE_ACTION = EnumEntityAction.View;
+const EXAMPLE_ROLE = EnumEntityPermissionType.AllRoles;
 
 const EXAMPLE_COMMIT_ID = 'exampleCommitId';
 const EXAMPLE_USER_ID = 'exampleUserId';
@@ -143,6 +153,12 @@ const EXAMPLE_LAST_ENTITY_VERSION: EntityVersion = {
   description: 'example entity'
 };
 
+const EXAMPLE_ENTITY_PERMISSION: EntityPermission = {
+  id: 'examplePermissionId',
+  entityVersionId: EXAMPLE_CURRENT_ENTITY_VERSION_ID,
+  action: EXAMPLE_ACTION,
+  type: EXAMPLE_ROLE
+};
 const EXAMPLE_ENTITY_FIELD_DATA = {
   name: 'exampleEntityFieldName',
   displayName: 'Example Entity Field Display Name',
@@ -1557,4 +1573,20 @@ describe('EntityService', () => {
       });
     }
   );
+  it('should get permissions', async () => {
+    const expected = [EXAMPLE_ENTITY_PERMISSION, EXAMPLE_ENTITY_PERMISSION];
+    jest
+      .spyOn(service, 'getVersionPermissions')
+      .mockResolvedValueOnce(expected);
+
+    expect(
+      await service.getPermissions(EXAMPLE_ENTITY_ID, EXAMPLE_ACTION)
+    ).toEqual(expected);
+    expect(service.getVersionPermissions).toBeCalledTimes(1);
+    expect(service.getVersionPermissions).toBeCalledWith(
+      EXAMPLE_ENTITY_ID,
+      CURRENT_VERSION_NUMBER,
+      EXAMPLE_ACTION
+    );
+  });
 });
