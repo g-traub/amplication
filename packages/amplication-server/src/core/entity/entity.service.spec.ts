@@ -179,6 +179,15 @@ const EXAMPLE_ENTITY_PERMISSION_FIELD: EntityPermissionField = {
   field: EXAMPLE_ENTITY_FIELD
 };
 
+const EXAMPLE_ENTITY_PERMISSION_FIELD_WITH_PERMISSION_AND_ENTITY_VERSION = {
+  ...EXAMPLE_ENTITY_PERMISSION_FIELD,
+  entityVersionId: EXAMPLE_CURRENT_ENTITY_VERSION_ID,
+  permission: {
+    ...EXAMPLE_ENTITY_PERMISSION,
+    entityVersion: EXAMPLE_CURRENT_ENTITY_VERSION
+  }
+};
+
 const EXAMPLE_ENTITY_PERMISSION_ROLE: EntityPermissionRole = {
   id: 'exampleEntityPermissionRoleId',
   entityVersionId: EXAMPLE_CURRENT_ENTITY_VERSION_ID,
@@ -343,6 +352,8 @@ const prismaEntityPermissionFieldFindManyMock = jest.fn(() => null);
 const prismaEntityPermissionFieldCreateMock = jest.fn(
   () => EXAMPLE_ENTITY_PERMISSION_FIELD
 );
+const prismaEntityPermissionFieldFindUniqueMock = jest.fn(() => null);
+const prismaEntityPermissionFieldUpdateMock = jest.fn(() => null);
 const prismaEntityPermissionRoleDeleteManyMock = jest.fn(() => null);
 
 const areDifferentMock = jest.fn(() => true);
@@ -386,7 +397,9 @@ describe('EntityService', () => {
             entityPermissionField: {
               deleteMany: prismaEntityPermissionFieldDeleteManyMock,
               findMany: prismaEntityPermissionFieldFindManyMock,
-              create: prismaEntityPermissionFieldCreateMock
+              create: prismaEntityPermissionFieldCreateMock,
+              findUnique: prismaEntityPermissionFieldFindUniqueMock,
+              update: prismaEntityPermissionFieldUpdateMock
             },
             entityPermissionRole: {
               deleteMany: prismaEntityPermissionRoleDeleteManyMock
@@ -1773,5 +1786,170 @@ describe('EntityService', () => {
     await expect(
       service.addEntityPermissionField(args, EXAMPLE_USER)
     ).rejects.toThrow(/invalid field selected/i);
+  });
+  it('should update an entity permission field roles', async () => {
+    const args = {
+      data: {
+        permissionField: {
+          connect: { id: EXAMPLE_ENTITY_PERMISSION_FIELD.id }
+        },
+        deletePermissionRoles: [{ id: 'id1' }, { id: 'id2' }],
+        addPermissionRoles: [{ id: EXAMPLE_ENTITY_PERMISSION_ROLE.id }]
+      }
+    };
+    const expected = {
+      ...EXAMPLE_ENTITY_PERMISSION_FIELD,
+      entityVersionId: EXAMPLE_CURRENT_ENTITY_VERSION_ID,
+      permissionRoles: [EXAMPLE_ENTITY_PERMISSION_ROLE]
+    };
+
+    prismaEntityPermissionFieldFindUniqueMock
+      .mockResolvedValueOnce(
+        EXAMPLE_ENTITY_PERMISSION_FIELD_WITH_PERMISSION_AND_ENTITY_VERSION
+      ) // before update
+      .mockResolvedValueOnce(expected); // after update
+
+    expect(
+      await service.updateEntityPermissionFieldRoles(args, EXAMPLE_USER)
+    ).toEqual(expected);
+    expect(prismaEntityPermissionFieldFindUniqueMock).toBeCalledTimes(2);
+    expect(prismaEntityPermissionFieldFindUniqueMock).nthCalledWith(1, {
+      where: {
+        id: args.data.permissionField.connect.id
+      },
+      include: {
+        permission: {
+          include: {
+            entityVersion: true
+          }
+        }
+      }
+    });
+    expect(prismaEntityPermissionFieldFindUniqueMock).nthCalledWith(2, {
+      where: {
+        id: args.data.permissionField.connect.id
+      },
+      include: {
+        field: true,
+        permissionRoles: {
+          include: {
+            appRole: true
+          }
+        }
+      }
+    });
+    expect(prismaEntityPermissionFieldUpdateMock).toBeCalledTimes(2);
+    expect(prismaEntityPermissionFieldUpdateMock).nthCalledWith(1, {
+      where: {
+        id: args.data.permissionField.connect.id
+      },
+      data: {
+        permissionRoles: {
+          connect: [{ id: EXAMPLE_ENTITY_PERMISSION_ROLE.id }]
+        }
+      }
+    });
+    expect(prismaEntityPermissionFieldUpdateMock).nthCalledWith(2, {
+      where: {
+        id: args.data.permissionField.connect.id
+      },
+      data: {
+        permissionRoles: {
+          disconnect: [{ id: 'id1' }, { id: 'id2' }]
+        }
+      }
+    });
+  });
+  it('should only add entity permission field roles', async () => {
+    const args = {
+      data: {
+        permissionField: {
+          connect: { id: EXAMPLE_ENTITY_PERMISSION_FIELD.id }
+        },
+        deletePermissionRoles: [],
+        addPermissionRoles: [{ id: EXAMPLE_ENTITY_PERMISSION_ROLE.id }]
+      }
+    };
+
+    prismaEntityPermissionFieldFindUniqueMock.mockResolvedValueOnce(
+      EXAMPLE_ENTITY_PERMISSION_FIELD_WITH_PERMISSION_AND_ENTITY_VERSION
+    );
+
+    await service.updateEntityPermissionFieldRoles(args, EXAMPLE_USER);
+    expect(prismaEntityPermissionFieldUpdateMock).toBeCalledTimes(1);
+    expect(prismaEntityPermissionFieldUpdateMock).toBeCalledWith({
+      where: {
+        id: args.data.permissionField.connect.id
+      },
+      data: {
+        permissionRoles: {
+          connect: [{ id: EXAMPLE_ENTITY_PERMISSION_ROLE.id }]
+        }
+      }
+    });
+  });
+  it('should only delete entity permission field roles', async () => {
+    const args = {
+      data: {
+        permissionField: {
+          connect: { id: EXAMPLE_ENTITY_PERMISSION_FIELD.id }
+        },
+        deletePermissionRoles: [{ id: 'id1' }, { id: 'id2' }],
+        addPermissionRoles: []
+      }
+    };
+
+    prismaEntityPermissionFieldFindUniqueMock.mockResolvedValueOnce(
+      EXAMPLE_ENTITY_PERMISSION_FIELD_WITH_PERMISSION_AND_ENTITY_VERSION
+    );
+
+    await service.updateEntityPermissionFieldRoles(args, EXAMPLE_USER);
+    expect(prismaEntityPermissionFieldUpdateMock).toBeCalledTimes(1);
+    expect(prismaEntityPermissionFieldUpdateMock).toBeCalledWith({
+      where: {
+        id: args.data.permissionField.connect.id
+      },
+      data: {
+        permissionRoles: {
+          disconnect: [{ id: 'id1' }, { id: 'id2' }]
+        }
+      }
+    });
+  });
+  it("should throw an error when the permission field we are updating doesn't exist", async () => {
+    const args = {
+      data: {
+        permissionField: {
+          connect: { id: EXAMPLE_ENTITY_PERMISSION_FIELD.id }
+        },
+        deletePermissionRoles: [{ id: 'id1' }, { id: 'id2' }],
+        addPermissionRoles: [{ id: EXAMPLE_ENTITY_PERMISSION_ROLE.id }]
+      }
+    };
+    prismaEntityPermissionFieldFindUniqueMock.mockResolvedValueOnce(null);
+    await expect(
+      service.updateEntityPermissionFieldRoles(args, EXAMPLE_USER)
+    ).rejects.toThrowError(/cannot find entity permission field/i);
+  });
+  it('should throw an error when the permission field we are updating is a committed version (not the current version)', async () => {
+    const args = {
+      data: {
+        permissionField: {
+          connect: { id: EXAMPLE_ENTITY_PERMISSION_FIELD.id }
+        },
+        deletePermissionRoles: [{ id: 'id1' }, { id: 'id2' }],
+        addPermissionRoles: [{ id: EXAMPLE_ENTITY_PERMISSION_ROLE.id }]
+      }
+    };
+    prismaEntityPermissionFieldFindUniqueMock.mockResolvedValueOnce({
+      ...EXAMPLE_ENTITY_PERMISSION_FIELD,
+      permission: {
+        ...EXAMPLE_ENTITY_PERMISSION,
+        entityVersion: EXAMPLE_LAST_ENTITY_VERSION
+      }
+    });
+    await expect(
+      service.updateEntityPermissionFieldRoles(args, EXAMPLE_USER)
+    ).rejects.toThrowError(/cannot update settings on committed versions/i);
   });
 });
