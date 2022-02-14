@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma } from '@prisma/client';
 import { camelCase } from 'camel-case';
 import { pick, omit } from 'lodash';
+import cuid from 'cuid';
 import {
   createEntityNamesWhereInput,
   DELETE_ONE_USER_ENTITY_ERROR_MESSAGE,
@@ -40,6 +41,7 @@ import {
 } from '../app/dto';
 import { DiffService } from 'src/services/diff.service';
 
+const EXAMPLE_CUID = 'EXAMPLE_CUID';
 const EXAMPLE_APP_ID = 'exampleAppId';
 const EXAMPLE_ENTITY_ID = 'exampleEntityId';
 const EXAMPLE_CURRENT_ENTITY_VERSION_ID = 'currentEntityVersionId';
@@ -357,6 +359,11 @@ const prismaEntityPermissionFieldUpdateMock = jest.fn(() => null);
 const prismaEntityPermissionRoleDeleteManyMock = jest.fn(() => null);
 
 const areDifferentMock = jest.fn(() => true);
+
+jest.mock('cuid');
+// eslint-disable-next-line
+// @ts-ignore
+cuid.mockImplementation(() => EXAMPLE_CUID);
 
 describe('EntityService', () => {
   let service: EntityService;
@@ -1951,5 +1958,99 @@ describe('EntityService', () => {
     await expect(
       service.updateEntityPermissionFieldRoles(args, EXAMPLE_USER)
     ).rejects.toThrowError(/cannot update settings on committed versions/i);
+  });
+  it('should create default related fields', async () => {
+    const EXAMPLE_LOOKUP_FIELD = {
+      ...EXAMPLE_ENTITY_FIELD,
+      dataType: EnumDataType.Lookup,
+      properties: {
+        allowMultipleSelection: true,
+        relatedEntityId: 'relatedEntityId'
+      }
+    };
+    const args = {
+      where: {
+        id: EXAMPLE_LOOKUP_FIELD.id
+      },
+      relatedFieldName: 'relatedFieldName',
+      relatedFieldDisplayName: 'relatedFieldDisplayName'
+    };
+    const updatedLookupField = {
+      ...EXAMPLE_LOOKUP_FIELD,
+      properties: {
+        ...EXAMPLE_LOOKUP_FIELD.properties,
+        relatedFieldId: EXAMPLE_CUID
+      }
+    };
+
+    jest.spyOn(service, 'validateFieldMutationArgs').mockReturnValueOnce();
+    prismaEntityFieldFindFirstMock.mockReturnValueOnce({
+      ...EXAMPLE_LOOKUP_FIELD,
+      entityVersion: EXAMPLE_CURRENT_ENTITY_VERSION
+    });
+    prismaEntityFieldUpdateMock.mockReturnValueOnce(updatedLookupField);
+
+    expect(await service.createDefaultRelatedField(args, EXAMPLE_USER)).toEqual(
+      updatedLookupField
+    );
+    expect(prismaEntityFieldFindFirstMock).toBeCalledTimes(1);
+    expect(prismaEntityFieldFindFirstMock).toBeCalledWith({
+      where: {
+        ...args.where,
+        entityVersion: {
+          versionNumber: CURRENT_VERSION_NUMBER
+        }
+      },
+      include: { entityVersion: true }
+    });
+    expect(service.validateFieldMutationArgs).toBeCalledTimes(1);
+    expect(service.validateFieldMutationArgs).toBeCalledWith(
+      {
+        ...args,
+        data: {
+          properties: EXAMPLE_LOOKUP_FIELD.properties,
+          dataType: EXAMPLE_LOOKUP_FIELD.dataType
+        }
+      },
+      EXAMPLE_ENTITY
+    );
+
+    expect(prismaEntityFieldCreateMock).toBeCalledTimes(1);
+    expect(prismaEntityFieldCreateMock).toBeCalledWith({
+      data: {
+        name: args.relatedFieldName,
+        displayName: args.relatedFieldDisplayName,
+        dataType: EnumDataType.Lookup,
+        permanentId: EXAMPLE_CUID,
+        entityVersion: {
+          connect: {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            entityId_versionNumber: {
+              entityId: EXAMPLE_LOOKUP_FIELD.properties.relatedEntityId,
+              versionNumber: CURRENT_VERSION_NUMBER
+            }
+          }
+        },
+        properties: {
+          allowMultipleSelection: !EXAMPLE_LOOKUP_FIELD.properties
+            .allowMultipleSelection,
+          relatedEntityId: EXAMPLE_ENTITY_ID,
+          relatedFieldId: EXAMPLE_LOOKUP_FIELD.permanentId
+        },
+        required: false,
+        unique: false,
+        searchable: true,
+        description: ''
+      }
+    });
+    expect(prismaEntityFieldUpdateMock).toBeCalledTimes(1);
+    expect(prismaEntityFieldUpdateMock).toBeCalledWith({
+      where: {
+        id: EXAMPLE_LOOKUP_FIELD.id
+      },
+      data: {
+        properties: updatedLookupField.properties
+      }
+    });
   });
 });
