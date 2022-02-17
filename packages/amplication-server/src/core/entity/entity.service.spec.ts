@@ -1959,7 +1959,7 @@ describe('EntityService', () => {
       service.updateEntityPermissionFieldRoles(args, EXAMPLE_USER)
     ).rejects.toThrowError(/cannot update settings on committed versions/i);
   });
-  it('should create default related fields', async () => {
+  it('should create a default related field', async () => {
     const EXAMPLE_LOOKUP_FIELD = {
       ...EXAMPLE_ENTITY_FIELD,
       dataType: EnumDataType.Lookup,
@@ -2052,5 +2052,72 @@ describe('EntityService', () => {
         properties: updatedLookupField.properties
       }
     });
+  });
+  it('should throw an error when creating a default related field and the provided field is not of type relation', async () => {
+    const args = {
+      where: {
+        id: EXAMPLE_ENTITY_FIELD.id
+      },
+      relatedFieldName: 'relatedFieldName',
+      relatedFieldDisplayName: 'relatedFieldDisplayName'
+    };
+
+    await expect(
+      service.createDefaultRelatedField(args, EXAMPLE_USER)
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `"Cannot created default related field, because the provided field is not of a relation field"`
+    );
+
+    expect(prismaEntityFieldFindFirstMock).toHaveBeenCalledTimes(1);
+    expect(prismaEntityFieldFindFirstMock).toBeCalledWith({
+      where: {
+        ...args.where,
+        entityVersion: {
+          versionNumber: CURRENT_VERSION_NUMBER
+        }
+      },
+      include: { entityVersion: true }
+    });
+  });
+  it('should throw an error when creating a default related field and the related field is already related to another field', async () => {
+    const EXAMPLE_ALREADY_RELATED_LOOKUP_FIELD = {
+      ...EXAMPLE_ENTITY_FIELD,
+      dataType: EnumDataType.Lookup,
+      properties: {
+        allowMultipleSelection: true,
+        relatedEntityId: 'relatedEntityId',
+        relatedFieldId: 'relatedFieldId'
+      }
+    };
+    const args = {
+      where: {
+        id: EXAMPLE_ALREADY_RELATED_LOOKUP_FIELD.id
+      },
+      relatedFieldName: 'relatedFieldName',
+      relatedFieldDisplayName: 'relatedFieldDisplayName'
+    };
+
+    prismaEntityFieldFindFirstMock.mockReturnValueOnce({
+      ...EXAMPLE_ALREADY_RELATED_LOOKUP_FIELD,
+      entityVersion: EXAMPLE_CURRENT_ENTITY_VERSION
+    });
+
+    await expect(
+      service.createDefaultRelatedField(args, EXAMPLE_USER)
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `"Cannot created default related field, because the provided field is already related to another field"`
+    );
+
+    expect(prismaEntityFieldFindFirstMock).toHaveBeenCalledTimes(1);
+    expect(prismaEntityFieldFindFirstMock).toBeCalledWith({
+      where: {
+        ...args.where,
+        entityVersion: {
+          versionNumber: CURRENT_VERSION_NUMBER
+        }
+      },
+      include: { entityVersion: true }
+    });
+  });
   });
 });
