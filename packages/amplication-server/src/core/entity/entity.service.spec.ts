@@ -105,6 +105,15 @@ const EXAMPLE_ENTITY_FIELD: EntityField = {
   description: 'example field'
 };
 
+const EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD = {
+  ...EXAMPLE_ENTITY_FIELD,
+  dataType: EnumDataType.Lookup,
+  properties: {
+    allowMultipleSelection: true,
+    relatedEntityId: 'relatedEntityId'
+  }
+};
+
 const EXAMPLE_CURRENT_ENTITY_VERSION: EntityVersion = {
   id: EXAMPLE_CURRENT_ENTITY_VERSION_ID,
   createdAt: new Date(),
@@ -331,6 +340,8 @@ const prismaEntityFieldFindManyMock = jest.fn(() => {
   return [EXAMPLE_ENTITY_FIELD];
 });
 
+const prismaEntityFieldDeleteMock = jest.fn(() => EXAMPLE_ENTITY_FIELD);
+
 const prismaEntityFieldFindFirstMock = jest.fn(
   (args: Prisma.EntityFieldFindUniqueArgs) => {
     if (args?.include?.entityVersion) {
@@ -396,7 +407,8 @@ describe('EntityService', () => {
               findFirst: prismaEntityFieldFindFirstMock,
               create: prismaEntityFieldCreateMock,
               update: prismaEntityFieldUpdateMock,
-              findMany: prismaEntityFieldFindManyMock
+              findMany: prismaEntityFieldFindManyMock,
+              delete: prismaEntityFieldDeleteMock
             },
             entityPermission: {
               findMany: prismaEntityPermissionFindManyMock
@@ -1960,32 +1972,24 @@ describe('EntityService', () => {
     ).rejects.toThrowError(/cannot update settings on committed versions/i);
   });
   it('should create a default related field', async () => {
-    const EXAMPLE_LOOKUP_FIELD = {
-      ...EXAMPLE_ENTITY_FIELD,
-      dataType: EnumDataType.Lookup,
-      properties: {
-        allowMultipleSelection: true,
-        relatedEntityId: 'relatedEntityId'
-      }
-    };
     const args = {
       where: {
-        id: EXAMPLE_LOOKUP_FIELD.id
+        id: EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD.id
       },
       relatedFieldName: 'relatedFieldName',
       relatedFieldDisplayName: 'relatedFieldDisplayName'
     };
     const updatedLookupField = {
-      ...EXAMPLE_LOOKUP_FIELD,
+      ...EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD,
       properties: {
-        ...EXAMPLE_LOOKUP_FIELD.properties,
+        ...EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD.properties,
         relatedFieldId: EXAMPLE_CUID
       }
     };
 
     jest.spyOn(service, 'validateFieldMutationArgs').mockReturnValueOnce();
     prismaEntityFieldFindFirstMock.mockReturnValueOnce({
-      ...EXAMPLE_LOOKUP_FIELD,
+      ...EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD,
       entityVersion: EXAMPLE_CURRENT_ENTITY_VERSION
     });
     prismaEntityFieldUpdateMock.mockReturnValueOnce(updatedLookupField);
@@ -2008,8 +2012,8 @@ describe('EntityService', () => {
       {
         ...args,
         data: {
-          properties: EXAMPLE_LOOKUP_FIELD.properties,
-          dataType: EXAMPLE_LOOKUP_FIELD.dataType
+          properties: EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD.properties,
+          dataType: EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD.dataType
         }
       },
       EXAMPLE_ENTITY
@@ -2026,16 +2030,18 @@ describe('EntityService', () => {
           connect: {
             // eslint-disable-next-line @typescript-eslint/naming-convention
             entityId_versionNumber: {
-              entityId: EXAMPLE_LOOKUP_FIELD.properties.relatedEntityId,
+              entityId:
+                EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD.properties
+                  .relatedEntityId,
               versionNumber: CURRENT_VERSION_NUMBER
             }
           }
         },
         properties: {
-          allowMultipleSelection: !EXAMPLE_LOOKUP_FIELD.properties
-            .allowMultipleSelection,
+          allowMultipleSelection: !EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD
+            .properties.allowMultipleSelection,
           relatedEntityId: EXAMPLE_ENTITY_ID,
-          relatedFieldId: EXAMPLE_LOOKUP_FIELD.permanentId
+          relatedFieldId: EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD.permanentId
         },
         required: false,
         unique: false,
@@ -2046,7 +2052,7 @@ describe('EntityService', () => {
     expect(prismaEntityFieldUpdateMock).toBeCalledTimes(1);
     expect(prismaEntityFieldUpdateMock).toBeCalledWith({
       where: {
-        id: EXAMPLE_LOOKUP_FIELD.id
+        id: EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD.id
       },
       data: {
         properties: updatedLookupField.properties
@@ -2080,25 +2086,23 @@ describe('EntityService', () => {
     });
   });
   it('should throw an error when creating a default related field and the related field is already related to another field', async () => {
-    const EXAMPLE_ALREADY_RELATED_LOOKUP_FIELD = {
-      ...EXAMPLE_ENTITY_FIELD,
-      dataType: EnumDataType.Lookup,
+    const EXAMPLE_LOOKUP_FIELD_WITH_RELATED_FIELD = {
+      ...EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD,
       properties: {
-        allowMultipleSelection: true,
-        relatedEntityId: 'relatedEntityId',
+        ...EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD.properties,
         relatedFieldId: 'relatedFieldId'
       }
     };
     const args = {
       where: {
-        id: EXAMPLE_ALREADY_RELATED_LOOKUP_FIELD.id
+        id: EXAMPLE_LOOKUP_FIELD_WITH_RELATED_FIELD.id
       },
       relatedFieldName: 'relatedFieldName',
       relatedFieldDisplayName: 'relatedFieldDisplayName'
     };
 
     prismaEntityFieldFindFirstMock.mockReturnValueOnce({
-      ...EXAMPLE_ALREADY_RELATED_LOOKUP_FIELD,
+      ...EXAMPLE_LOOKUP_FIELD_WITH_RELATED_FIELD,
       entityVersion: EXAMPLE_CURRENT_ENTITY_VERSION
     });
 
@@ -2119,5 +2123,121 @@ describe('EntityService', () => {
       include: { entityVersion: true }
     });
   });
+  it('should delete an entity field', async () => {
+    const args = {
+      where: {
+        id: EXAMPLE_ENTITY_FIELD.id
+      }
+    };
+
+    expect(await service.deleteField(args, EXAMPLE_USER)).toEqual(
+      EXAMPLE_ENTITY_FIELD
+    );
+
+    expect(prismaEntityFieldFindFirstMock).toHaveBeenCalledTimes(1);
+    expect(prismaEntityFieldFindFirstMock).toHaveBeenCalledWith({
+      where: {
+        ...args.where,
+        entityVersion: {
+          versionNumber: CURRENT_VERSION_NUMBER
+        }
+      },
+      include: {
+        entityVersion: true
+      }
+    });
+
+    expect(prismaEntityFieldDeleteMock).toHaveBeenCalledTimes(1);
+    expect(prismaEntityFieldDeleteMock).toHaveBeenCalledWith(args);
+  });
+  it('should delete an entity field and related field when the field is a lookup', async () => {
+    const EXAMPLE_LOOKUP_FIELD = {
+      ...EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD,
+      properties: {
+        relatedEntityId: 'relatedEntityId',
+        relatedFieldId: 'relatedFieldId'
+      }
+    };
+    const EXAMPLE_RELATED_LOOKUP_FIELD = {
+      ...EXAMPLE_LOOKUP_FIELD_WITHOUT_RELATED_FIELD,
+      permanentId: 'relatedFieldId',
+      properties: {
+        relatedEntityId: EXAMPLE_ENTITY_ID,
+        relatedFieldId: EXAMPLE_ENTITY_FIELD.id
+      }
+    };
+    const args = {
+      where: {
+        id: EXAMPLE_LOOKUP_FIELD.id
+      }
+    };
+
+    prismaEntityFieldFindFirstMock
+      .mockReturnValueOnce({
+        ...EXAMPLE_LOOKUP_FIELD,
+        entityVersion: EXAMPLE_CURRENT_ENTITY_VERSION
+      })
+      .mockReturnValueOnce(EXAMPLE_RELATED_LOOKUP_FIELD);
+    prismaEntityFieldDeleteMock
+      .mockReturnValueOnce(EXAMPLE_RELATED_LOOKUP_FIELD)
+      .mockReturnValueOnce(EXAMPLE_LOOKUP_FIELD);
+
+    expect(await service.deleteField(args, EXAMPLE_USER)).toEqual(
+      EXAMPLE_LOOKUP_FIELD
+    );
+
+    expect(prismaEntityFieldFindFirstMock).toHaveBeenCalledTimes(2);
+    expect(prismaEntityFieldFindFirstMock).toHaveBeenNthCalledWith(1, {
+      where: {
+        ...args.where,
+        entityVersion: {
+          versionNumber: CURRENT_VERSION_NUMBER
+        }
+      },
+      include: {
+        entityVersion: true
+      }
+    });
+    // related field
+    expect(prismaEntityFieldFindFirstMock).toHaveBeenNthCalledWith(2, {
+      where: {
+        permanentId: EXAMPLE_RELATED_LOOKUP_FIELD.permanentId,
+        entityVersion: {
+          versionNumber: CURRENT_VERSION_NUMBER
+        }
+      }
+    });
+
+    expect(prismaEntityFieldDeleteMock).toHaveBeenCalledTimes(2);
+    // related field
+    expect(prismaEntityFieldDeleteMock).toHaveBeenNthCalledWith(1, {
+      where: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        entityVersionId_permanentId: {
+          permanentId: EXAMPLE_RELATED_LOOKUP_FIELD.permanentId,
+          entityVersionId: EXAMPLE_RELATED_LOOKUP_FIELD.entityVersionId
+        }
+      }
+    });
+    expect(prismaEntityFieldDeleteMock).toHaveBeenNthCalledWith(2, args);
+  });
+  it("should throw an error when deleting an entity field and it's not allowed to delete a field of that type", async () => {
+    const args = {
+      where: {
+        id: EXAMPLE_ENTITY_FIELD.id
+      }
+    };
+
+    prismaEntityFieldFindFirstMock.mockReturnValueOnce({
+      ...EXAMPLE_ENTITY_FIELD,
+      entityVersion: EXAMPLE_CURRENT_ENTITY_VERSION,
+      dataType: EnumDataType.Id
+    });
+
+    await expect(
+      service.deleteField(args, EXAMPLE_USER)
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `"Cannot delete entity field Id because fields with the data type Id cannot be deleted"`
+    );
   });
 });
