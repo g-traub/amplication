@@ -34,6 +34,8 @@ import {
   CURRENT_VERSION_NUMBER,
   DEFAULT_ENTITIES,
   DEFAULT_PERMISSIONS,
+  SYSTEM_DATA_TYPES,
+  USER_ENTITY_FIELDS,
   USER_ENTITY_NAME
 } from './constants';
 import { JsonSchemaValidationModule } from 'src/services/jsonSchemaValidation.module';
@@ -2311,5 +2313,60 @@ describe('EntityService', () => {
     ).toThrowErrorMatchingInlineSnapshot(
       `"When data.dataType is not Lookup, relatedFieldName and relatedFieldDisplayName must be null"`
     );
+  });
+  it.each(['', '1name', 'name-1', 'name 1'])(
+    'should throw an error when the field data we are validating has an invalid field name (%s)',
+    async name => {
+      await expect(
+        service.validateFieldData({ name }, EXAMPLE_ENTITY)
+      ).rejects.toThrowError(
+        'Name must only contain letters, numbers, the dollar sign, or the underscore character and must not start with a number'
+      );
+    }
+  );
+  it.each(Array.from(SYSTEM_DATA_TYPES))(
+    `should throw an error when the field data we are validating is of a system data type %s`,
+    async dataType => {
+      await expect(
+        service.validateFieldData({ dataType }, EXAMPLE_ENTITY)
+      ).rejects.toThrowError(
+        `The data type ${dataType} cannot be used for non-system fields`
+      );
+    }
+  );
+  it.each(USER_ENTITY_FIELDS)(
+    'should throw an error when the field data we are validating is in user entity and uses a reserved user field name',
+    async name => {
+      await expect(
+        service.validateFieldData({ name }, EXAMPLE_USER_ENTITY)
+      ).rejects.toThrowError(
+        `The field name '${name}' is a reserved field name and it cannot be used on the 'user' entity`
+      );
+    }
+  );
+  it('should throw an error when the field data we are validating is in user entity, is of type lookup and is required', async () => {
+    const data = {
+      name: EXAMPLE_ENTITY_FIELD.name, // ...
+      dataType: EnumDataType.Lookup,
+      required: true
+    };
+    await expect(
+      service.validateFieldData(data, EXAMPLE_USER_ENTITY)
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `"Fields with data type \\"Lookup\\" of the entity \\"User\\" must not be marked as required. Please unmark the field as required and try again"`
+    );
+  });
+  it('should throw an error when the field data we are validating has invalid properties', async () => {
+    const data = {
+      dataType: EnumDataType.SingleLineText,
+      properties: {
+        invalidProperty: 'invalidProperty'
+      }
+    };
+
+    await expect(
+      service.validateFieldData(data, EXAMPLE_ENTITY)
+    ).rejects.toThrowError();
+    // The error message contains an error message from ajv package so we don't want to test it
   });
 });
