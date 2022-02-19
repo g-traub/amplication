@@ -25,7 +25,11 @@ import {
 import { EnumDataType } from 'src/enums/EnumDataType';
 import { EnumEntityAction } from 'src/enums/EnumEntityAction';
 import { EnumEntityPermissionType } from 'src/enums/EnumEntityPermissionType';
-import { FindManyEntityArgs } from './dto';
+import {
+  CreateOneEntityFieldArgs,
+  FindManyEntityArgs,
+  UpdateOneEntityFieldArgs
+} from './dto';
 import {
   CURRENT_VERSION_NUMBER,
   DEFAULT_ENTITIES,
@@ -261,6 +265,28 @@ const EXAMPLE_ENTITY_PERMISSION_WITH_ROLES_AND_FIELDS: EntityPermission = {
     }
   ]
 };
+
+const buildFieldMutationArgs: (
+  overrides: Partial<CreateOneEntityFieldArgs | UpdateOneEntityFieldArgs>
+) => CreateOneEntityFieldArgs | UpdateOneEntityFieldArgs = overrides => ({
+  ...overrides,
+  data: {
+    name: EXAMPLE_ENTITY_FIELD.name,
+    displayName: EXAMPLE_ENTITY_FIELD.displayName,
+    required: EXAMPLE_ENTITY_FIELD.required,
+    unique: EXAMPLE_ENTITY_FIELD.unique,
+    searchable: EXAMPLE_ENTITY_FIELD.searchable,
+    description: EXAMPLE_ENTITY_FIELD.description,
+    entity: {
+      connect: {
+        id: EXAMPLE_ENTITY_ID
+      }
+    },
+    dataType: EnumDataType.SingleLineText,
+    properties: {},
+    ...overrides.data
+  }
+});
 
 const prismaEntityFindFirstMock = jest.fn(() => {
   return EXAMPLE_ENTITY;
@@ -2238,6 +2264,52 @@ describe('EntityService', () => {
       service.deleteField(args, EXAMPLE_USER)
     ).rejects.toThrowErrorMatchingInlineSnapshot(
       `"Cannot delete entity field Id because fields with the data type Id cannot be deleted"`
+    );
+  });
+  it('should throw an error when validating lookup field mutation args without necessary relation data', () => {
+    const args = buildFieldMutationArgs({
+      data: {
+        dataType: EnumDataType.Lookup,
+        properties: {
+          relatedEntityId: EXAMPLE_ENTITY_ID
+        }
+      }
+    });
+
+    expect(() =>
+      service.validateFieldMutationArgs(args, EXAMPLE_ENTITY)
+    ).toThrowErrorMatchingInlineSnapshot(
+      `"When data.dataType is Lookup, either data.properties.relatedFieldId must be defined or relatedFieldName and relatedFieldDisplayName must not be null and not be empty"`
+    );
+  });
+  it('should throw an error when validating lookup field mutation args with incompatible relation data', () => {
+    const args = buildFieldMutationArgs({
+      relatedFieldName: 'relatedFieldName',
+      relatedFieldDisplayName: 'relatedFieldDisplayName',
+      data: {
+        dataType: EnumDataType.Lookup,
+        properties: {
+          relatedFieldId: EXAMPLE_ENTITY_ID
+        }
+      }
+    });
+
+    expect(() =>
+      service.validateFieldMutationArgs(args, EXAMPLE_ENTITY)
+    ).toThrowErrorMatchingInlineSnapshot(
+      `"When data.dataType is Lookup and data.properties.relatedFieldId is defined, relatedFieldName and relatedFieldDisplayName must be null"`
+    );
+  });
+  it('should throw an error when validating non-lookup field mutation args with relation data', () => {
+    const args = buildFieldMutationArgs({
+      relatedFieldName: 'relatedFieldName',
+      relatedFieldDisplayName: 'relatedFieldDisplayName'
+    });
+
+    expect(() =>
+      service.validateFieldMutationArgs(args, EXAMPLE_ENTITY)
+    ).toThrowErrorMatchingInlineSnapshot(
+      `"When data.dataType is not Lookup, relatedFieldName and relatedFieldDisplayName must be null"`
     );
   });
 });
