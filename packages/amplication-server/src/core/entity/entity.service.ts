@@ -1784,7 +1784,7 @@ export class EntityService {
 
     if (isUserEntity(entity)) {
       // Make sure the field's name is not reserved
-      if (isReservedUserEntityFieldName(data.name)) {
+      if (data.name && isReservedUserEntityFieldName(data.name)) {
         throw new DataConflictError(
           `The field name '${data.name}' is a reserved field name and it cannot be used on the 'user' entity`
         );
