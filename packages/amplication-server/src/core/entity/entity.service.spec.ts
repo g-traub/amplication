@@ -388,6 +388,7 @@ const prismaEntityPermissionFindManyMock = jest.fn(() => [
   EXAMPLE_ENTITY_PERMISSION,
   EXAMPLE_ENTITY_PERMISSION
 ]);
+const prismaEntityPermissionUpsertMock = jest.fn(() => null);
 const prismaEntityPermissionFieldDeleteManyMock = jest.fn(() => null);
 const prismaEntityPermissionFieldFindManyMock = jest.fn(() => null);
 const prismaEntityPermissionFieldCreateMock = jest.fn(
@@ -439,7 +440,8 @@ describe('EntityService', () => {
               delete: prismaEntityFieldDeleteMock
             },
             entityPermission: {
-              findMany: prismaEntityPermissionFindManyMock
+              findMany: prismaEntityPermissionFindManyMock,
+              upsert: prismaEntityPermissionUpsertMock
             },
             entityPermissionField: {
               deleteMany: prismaEntityPermissionFieldDeleteManyMock,
@@ -1759,6 +1761,66 @@ describe('EntityService', () => {
               }
             }
           }
+        }
+      }
+    });
+  });
+  it('should update entity permission', async () => {
+    const updates = {
+      action: EnumEntityAction.Update,
+      type: EnumEntityPermissionType.Granular
+    };
+    const args = {
+      data: updates,
+      where: {
+        id: EXAMPLE_ENTITY_ID
+      }
+    };
+    const updatedEntityPermission = {
+      ...EXAMPLE_ENTITY_PERMISSION,
+      ...updates
+    };
+
+    prismaEntityVersionFindOneMock.mockResolvedValueOnce(
+      EXAMPLE_CURRENT_ENTITY_VERSION
+    );
+    prismaEntityPermissionUpsertMock.mockResolvedValueOnce(
+      updatedEntityPermission
+    );
+
+    expect(await service.updateEntityPermission(args, EXAMPLE_USER)).toEqual(
+      updatedEntityPermission
+    );
+
+    expect(prismaEntityVersionFindOneMock).toBeCalledTimes(1);
+    expect(prismaEntityVersionFindOneMock).toBeCalledWith({
+      where: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        entityId_versionNumber: {
+          entityId: args.where.id,
+          versionNumber: CURRENT_VERSION_NUMBER
+        }
+      }
+    });
+
+    expect(prismaEntityPermissionUpsertMock).toBeCalledTimes(1);
+    expect(prismaEntityPermissionUpsertMock).toBeCalledWith({
+      create: {
+        ...args.data,
+        entityVersion: {
+          connect: {
+            id: EXAMPLE_CURRENT_ENTITY_VERSION_ID
+          }
+        }
+      },
+      update: {
+        type: args.data.type
+      },
+      where: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        entityVersionId_action: {
+          entityVersionId: EXAMPLE_CURRENT_ENTITY_VERSION_ID,
+          action: args.data.action
         }
       }
     });
