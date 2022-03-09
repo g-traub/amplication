@@ -290,6 +290,18 @@ const buildFieldMutationArgs: (
   }
 });
 
+const buildAppRole = (overrides: Partial<AppRole>): AppRole => ({
+  ...overrides,
+  ...EXAMPLE_APP_ROLE
+});
+
+const buildPermissionRole = (
+  overrides: Partial<EntityPermissionRole>
+): EntityPermissionRole => ({
+  ...overrides,
+  ...EXAMPLE_ENTITY_PERMISSION_ROLE
+});
+
 const prismaEntityFindFirstMock = jest.fn(() => {
   return EXAMPLE_ENTITY;
 });
@@ -389,6 +401,7 @@ const prismaEntityPermissionFindManyMock = jest.fn(() => [
   EXAMPLE_ENTITY_PERMISSION
 ]);
 const prismaEntityPermissionUpsertMock = jest.fn(() => null);
+const prismaEntityPermissionUpdateMock = jest.fn(() => null);
 const prismaEntityPermissionFieldDeleteManyMock = jest.fn(() => null);
 const prismaEntityPermissionFieldFindManyMock = jest.fn(() => null);
 const prismaEntityPermissionFieldCreateMock = jest.fn(
@@ -441,6 +454,7 @@ describe('EntityService', () => {
             },
             entityPermission: {
               findMany: prismaEntityPermissionFindManyMock,
+              update: prismaEntityPermissionUpdateMock,
               upsert: prismaEntityPermissionUpsertMock
             },
             entityPermissionField: {
@@ -1821,6 +1835,316 @@ describe('EntityService', () => {
         entityVersionId_action: {
           entityVersionId: EXAMPLE_CURRENT_ENTITY_VERSION_ID,
           action: args.data.action
+        }
+      }
+    });
+  });
+  it('should update entity permission roles : adding roles', async () => {
+    const appRoleA = buildAppRole({ id: 'roleA' });
+    const appRoleB = buildAppRole({ id: 'roleB' });
+
+    const args = {
+      data: {
+        action: EnumEntityAction.Update,
+        entity: {
+          connect: {
+            id: EXAMPLE_ENTITY_ID
+          }
+        },
+        addRoles: [{ id: appRoleA.id }, { id: appRoleB.id }]
+      }
+    };
+    const initialEntityVersion = {
+      ...EXAMPLE_CURRENT_ENTITY_VERSION,
+      permissions: [
+        {
+          ...EXAMPLE_ENTITY_PERMISSION,
+          permissionRoles: []
+        }
+      ]
+    };
+    const updatedEntityPermission = {
+      ...EXAMPLE_ENTITY_PERMISSION,
+      permissionRoles: [
+        buildPermissionRole({
+          id: 'permissionRoleA',
+          appRole: appRoleA
+        }),
+        buildPermissionRole({
+          id: 'permissionRoleB',
+          appRole: appRoleB
+        })
+      ]
+    };
+
+    prismaEntityVersionFindOneMock.mockResolvedValueOnce(initialEntityVersion);
+    prismaEntityPermissionFindManyMock.mockReturnValueOnce([
+      updatedEntityPermission
+    ]);
+
+    expect(
+      await service.updateEntityPermissionRoles(args, EXAMPLE_USER)
+    ).toEqual(updatedEntityPermission);
+
+    expect(prismaEntityVersionFindOneMock).toBeCalledTimes(1);
+    expect(prismaEntityVersionFindOneMock).toBeCalledWith({
+      where: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        entityId_versionNumber: {
+          entityId: args.data.entity.connect.id,
+          versionNumber: CURRENT_VERSION_NUMBER
+        }
+      }
+    });
+
+    expect(prismaEntityPermissionUpdateMock).toBeCalledTimes(1);
+    expect(prismaEntityPermissionUpdateMock).toBeCalledWith({
+      where: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        entityVersionId_action: {
+          entityVersionId: EXAMPLE_CURRENT_ENTITY_VERSION_ID,
+          action: args.data.action
+        }
+      },
+      data: {
+        permissionRoles: {
+          create: [
+            {
+              appRole: {
+                connect: { id: appRoleA.id }
+              }
+            },
+            {
+              appRole: {
+                connect: { id: appRoleB.id }
+              }
+            }
+          ]
+        }
+      }
+    });
+
+    expect(prismaEntityPermissionFindManyMock).toBeCalledTimes(1);
+    expect(prismaEntityPermissionFindManyMock).toBeCalledWith({
+      where: {
+        entityVersion: {
+          entityId: args.data.entity.connect.id,
+          versionNumber: CURRENT_VERSION_NUMBER
+        },
+        action: args.data.action
+      },
+      include: {
+        permissionRoles: {
+          include: {
+            appRole: true
+          }
+        },
+        permissionFields: {
+          include: {
+            field: true,
+            permissionRoles: {
+              include: {
+                appRole: true
+              }
+            }
+          }
+        }
+      },
+      take: 1
+    });
+
+    expect(prismaEntityPermissionRoleDeleteManyMock).not.toBeCalled();
+  });
+  it('should update entity permission roles : removing roles', async () => {
+    const appRoleA = buildAppRole({ id: 'roleA' });
+    const appRoleB = buildAppRole({ id: 'roleB' });
+
+    const args = {
+      data: {
+        action: EnumEntityAction.Update,
+        entity: {
+          connect: {
+            id: EXAMPLE_ENTITY_ID
+          }
+        },
+        deleteRoles: [{ id: appRoleA.id }, { id: appRoleB.id }]
+      }
+    };
+    const initialEntityVersion = {
+      ...EXAMPLE_CURRENT_ENTITY_VERSION,
+      permissions: [
+        {
+          ...EXAMPLE_ENTITY_PERMISSION,
+          permissionRoles: [
+            {
+              id: 'permissionRoleA',
+              ...EXAMPLE_ENTITY_PERMISSION_ROLE,
+              appRole: appRoleA
+            },
+            {
+              id: 'permissionRoleB',
+              ...EXAMPLE_ENTITY_PERMISSION_ROLE,
+              appRole: appRoleB
+            }
+          ]
+        }
+      ]
+    };
+    const updatedEntityPermission = {
+      ...EXAMPLE_ENTITY_PERMISSION,
+      permissionRoles: []
+    };
+
+    prismaEntityVersionFindOneMock.mockResolvedValueOnce(initialEntityVersion);
+    prismaEntityPermissionFindManyMock.mockReturnValueOnce([
+      updatedEntityPermission
+    ]);
+
+    expect(
+      await service.updateEntityPermissionRoles(args, EXAMPLE_USER)
+    ).toEqual(updatedEntityPermission);
+
+    expect(prismaEntityVersionFindOneMock).toBeCalledTimes(1);
+    expect(prismaEntityVersionFindOneMock).toBeCalledWith({
+      where: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        entityId_versionNumber: {
+          entityId: args.data.entity.connect.id,
+          versionNumber: CURRENT_VERSION_NUMBER
+        }
+      }
+    });
+
+    expect(prismaEntityPermissionRoleDeleteManyMock).toBeCalledTimes(1);
+    expect(prismaEntityPermissionRoleDeleteManyMock).toBeCalledWith({
+      where: {
+        appRoleId: {
+          in: [appRoleA.id, appRoleB.id]
+        }
+      }
+    });
+
+    expect(prismaEntityPermissionUpdateMock).not.toBeCalled();
+  });
+  it('should update entity permission roles : add and remove roles', async () => {
+    const appRoleA = buildAppRole({ id: 'roleA' });
+    const appRoleB = buildAppRole({ id: 'roleB' });
+    const appRoleC = buildAppRole({ id: 'roleC' });
+    const permissionRoleA = buildPermissionRole({
+      id: 'permissionRoleA',
+      appRole: appRoleA
+    });
+    const permissionRoleB = buildPermissionRole({
+      id: 'permissionRoleB',
+      appRole: appRoleB
+    });
+    const permissionRoleC = buildPermissionRole({
+      id: 'permissionRoleC',
+      appRole: appRoleC
+    });
+
+    const args = {
+      data: {
+        action: EnumEntityAction.Update,
+        entity: {
+          connect: {
+            id: EXAMPLE_ENTITY_ID
+          }
+        },
+        addRoles: [{ id: appRoleA.id }],
+        deleteRoles: [{ id: appRoleB.id }]
+      }
+    };
+    const initialEntityVersion = {
+      ...EXAMPLE_CURRENT_ENTITY_VERSION,
+      permissions: [
+        {
+          ...EXAMPLE_ENTITY_PERMISSION,
+          permissionRoles: [permissionRoleA, permissionRoleB]
+        }
+      ]
+    };
+    const updatedEntityPermission = {
+      ...EXAMPLE_ENTITY_PERMISSION,
+      permissionRoles: [permissionRoleA, permissionRoleC]
+    };
+
+    prismaEntityVersionFindOneMock.mockResolvedValueOnce(initialEntityVersion);
+    prismaEntityPermissionFindManyMock.mockReturnValueOnce([
+      updatedEntityPermission
+    ]);
+
+    expect(
+      await service.updateEntityPermissionRoles(args, EXAMPLE_USER)
+    ).toEqual(updatedEntityPermission);
+
+    expect(prismaEntityVersionFindOneMock).toBeCalledTimes(1);
+    expect(prismaEntityVersionFindOneMock).toBeCalledWith({
+      where: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        entityId_versionNumber: {
+          entityId: args.data.entity.connect.id,
+          versionNumber: CURRENT_VERSION_NUMBER
+        }
+      }
+    });
+
+    expect(prismaEntityPermissionUpdateMock).toBeCalledTimes(1);
+    expect(prismaEntityPermissionUpdateMock).toBeCalledWith({
+      where: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        entityVersionId_action: {
+          entityVersionId: EXAMPLE_CURRENT_ENTITY_VERSION_ID,
+          action: args.data.action
+        }
+      },
+      data: {
+        permissionRoles: {
+          create: [
+            {
+              appRole: {
+                connect: { id: appRoleA.id }
+              }
+            }
+          ]
+        }
+      }
+    });
+
+    expect(prismaEntityPermissionFindManyMock).toBeCalledTimes(1);
+    expect(prismaEntityPermissionFindManyMock).toBeCalledWith({
+      where: {
+        entityVersion: {
+          entityId: args.data.entity.connect.id,
+          versionNumber: CURRENT_VERSION_NUMBER
+        },
+        action: args.data.action
+      },
+      include: {
+        permissionRoles: {
+          include: {
+            appRole: true
+          }
+        },
+        permissionFields: {
+          include: {
+            field: true,
+            permissionRoles: {
+              include: {
+                appRole: true
+              }
+            }
+          }
+        }
+      },
+      take: 1
+    });
+
+    expect(prismaEntityPermissionRoleDeleteManyMock).toBeCalledTimes(1);
+    expect(prismaEntityPermissionRoleDeleteManyMock).toBeCalledWith({
+      where: {
+        appRoleId: {
+          in: [appRoleB.id]
         }
       }
     });
